@@ -1,0 +1,49 @@
+!pip install -q pyspark
+!pip install -q opencv-python
+from pyspark.sql import SparkSession
+import cv2
+from google.colab.patches import cv2_imshow
+
+# Initialize Spark session
+spark = SparkSession.builder.appName("VideoAnalysis").getOrCreate()
+
+# Path to your video file (upload the file to Colab or use a URL)
+video_file_path = "/content/WhatsApp Video 2024-11-13 at 23.07.25_e534bbe0.mp4"  # Replace with your video file path
+
+# Initialize video capture
+video_capture = cv2.VideoCapture(video_file_path)
+
+# Check if video file opened successfully
+if not video_capture.isOpened():
+    print("Error: Could not open video.")
+else:
+    frames = []
+    # Read video frame by frame
+    while True:
+        ret, frame = video_capture.read()
+        if not ret:
+            break
+        # Add each frame to a list for distributed processing
+        frames.append(frame)
+    
+    # Parallelize frames using Spark for distributed processing
+    rdd_frames = spark.sparkContext.parallelize(frames)
+
+    # Define a simple frame processing function
+    def process_frame(frame):
+        # Convert to grayscale
+        gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        # Apply edge detection
+        edges = cv2.Canny(gray_frame, 100, 200)
+        return edges
+    
+    # Apply processing to each frame using PySpark
+    processed_frames = rdd_frames.map(process_frame).collect()
+ 
+    # Display processed frames (edges) using cv2_imshow in Colab
+    for edge_frame in processed_frames:
+        cv2_imshow(edge_frame)
+
+# Release the video capture
+video_capture.release()
+spark.stop()
